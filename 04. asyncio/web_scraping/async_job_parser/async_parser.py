@@ -55,31 +55,34 @@ def parse_page(response_html, new_vacancies: list):
         })
 
 
+async def save_to_db(db_conn, to_db):
+    await db_conn.execute(
+        """insert into jobs(title, company, href, description, date_add) values($1, $2, $3, $4, $5) """,
+        to_db["title"], to_db["company"], to_db["href"], to_db["short_description"], to_db["date_add"])
+
+
 async def main():
-    db_conn = await asyncpg.connect("postgresql://async:Dexter89!@localhost/async_parser")
     url = JOOBLE_URL.format(query)
     new_vacancies = []
-    tasks = []
+    db_conn = await asyncpg.connect("postgresql://async:Dexter89!@localhost/async_parser")
+
+    # synchronous block
+    response_html = requests.get(url).content
+    pages = define_pages_amount(response_html)
+    urls_to_processing = get_all_urls(pages, url)
+
     async with aiohttp.ClientSession() as session:
-        response_html = requests.get(url).content
-        pages = define_pages_amount(response_html)
-        urls_to_processing = get_all_urls(pages, url)
         # produce tasks
-        for url in urls_to_processing:
-            task = asyncio.create_task(get_response(session, url))
-            tasks.append(task)
+        tasks = [asyncio.create_task(get_response(session, url)) for url in urls_to_processing]
         # process tasks
         for task in tasks:
             html = await task
-            # produce tasks
+            # produce tasks for db
             parse_page(html, new_vacancies)
             # process tasks
             while new_vacancies:
                 to_db = new_vacancies.pop(0)
-                await db_conn.execute(
-                    """insert into jobs(title, company, href, description, date_add) values($1, $2, $3, $4, $5) """,
-                    to_db["title"], to_db["company"], to_db["href"], to_db["short_description"], to_db["date_add"])
-        # print(new_vacancies)
+                await save_to_db(db_conn, to_db)
         await db_conn.close()
 
 

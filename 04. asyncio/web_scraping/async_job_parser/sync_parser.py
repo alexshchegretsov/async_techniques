@@ -60,6 +60,7 @@ def main():
                             database="async_parser")
     cursor = conn.cursor()
     formula = """insert into jobs(title, company, href, description, date_add) values (%s, %s, %s, %s, %s) """
+
     new_vacancies = []
     url = JOOBLE_URL.format(query)
     with requests.Session() as session:
